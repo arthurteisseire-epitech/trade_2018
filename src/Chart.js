@@ -8,14 +8,22 @@
  */
 module.exports = class Chart {
     constructor() {
-        this.candles = {};
+        this.candles = [];
     }
 
     addCandle(candle) {
-        this.candles[candle.date.getTime()] = candle;
+        this.candles.push(candle);
     }
 
-    getCandleAt(date) {
-        return this.candles[date.getTime()];
+    getCandleAt(idx) {
+        return this.candles[idx];
+    }
+
+    getLastCandle() {
+        return this.candles[this.candles.length - 1];
+    }
+
+    length() {
+        return this.candles.length;
     }
 };

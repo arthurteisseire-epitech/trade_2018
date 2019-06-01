@@ -11,7 +11,7 @@ const readline = require('readline');
 const utils = require('./utils');
 const Candle = require('./Candle');
 const Chart = require('./Chart');
-const HODLStrategy = require('./HODLStrategy');
+const IchimokuStrategy = require('./IchimokuStrategy');
 
 module.exports = class Bot {
     constructor() {
@@ -33,7 +33,7 @@ module.exports = class Bot {
             stacks: {},
         };
 
-        this.strategy = new HODLStrategy();
+        this.strategy = new IchimokuStrategy();
     }
 
     run() {
