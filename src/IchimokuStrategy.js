@@ -19,6 +19,12 @@ module.exports = class IchimokuStrat {
         this.timeSinceCrossDown = new Map();
         this.timeSinceCrossDown.set('USDT_ETH', []);
         this.timeSinceCrossDown.set('USDT_BTC', []);
+        this.buySignalCount = new Map();
+        this.buySignalCount.set('USDT_ETH', 0);
+        this.buySignalCount.set('USDT_BTC', 0);
+        this.sellSignalCount = new Map();
+        this.sellSignalCount.set('USDT_ETH', 0);
+        this.sellSignalCount.set('USDT_BTC', 0);
     }
 
     execute(gameSettings, state) {
@@ -29,11 +35,11 @@ module.exports = class IchimokuStrat {
         const BTCAmount = dollars / (2 * BTCClosePrice);
 
         const ETHOrder = this.findOrder(state.charts, 'USDT_ETH', ETHAmount, state.stacks["ETH"]);
-        const BTCOrder = this.findOrder(state.charts,'USDT_BTC', BTCAmount, state.stacks["BTC"]);
+        const BTCOrder = this.findOrder(state.charts, 'USDT_BTC', BTCAmount, state.stacks["BTC"]);
 
         return IchimokuStrat.pass_order(ETHOrder, BTCOrder).toString();
     }
-    
+
     static pass_order(ETHOrder, BTCOrder) {
         if (!ETHOrder && !BTCOrder)
             return 'pass';
@@ -90,11 +96,37 @@ module.exports = class IchimokuStrat {
 
         this.updateCrossing(TenkanSen, KijunSen, pair);
         this.updateTimeSinceCross(pair);
-        if (amount > 0 && this.timeSinceCrossUp.get(pair).length > 0 && ClosePrice > SenkouSpanA && ClosePrice > SenkouSpanB)
-            return new Order('buy', pair, amount);
-        if (CurrencyPossessed > 0 && this.timeSinceCrossDown.get(pair).length > 0 && ClosePrice < SenkouSpanB && ClosePrice < SenkouSpanA)
-            return new Order('sell', pair, CurrencyPossessed);
+        if (amount > 0) {
+            if (this.buySignal(ClosePrice, SenkouSpanA, SenkouSpanB, pair)) {
+                this.buySignalCount.set(pair, this.buySignalCount.get(pair) + 1);
+                this.sellSignalCount.set(pair, Math.max(this.sellSignalCount.get(pair) - 1, 0));
+                return new Order('buy', pair, amount);
+            }
+            if (this.stopSell(ClosePrice, SenkouSpanA, SenkouSpanB, pair)) {
+                this.sellSignalCount.set(pair, Math.max(this.sellSignalCount.get(pair) - 1, 0));
+                return new Order('buy', pair, amount);
+            }
+        }
+        if (CurrencyPossessed > 0) {
+            if (this.sellSignal(ClosePrice, SenkouSpanB, SenkouSpanA, pair)) {
+                this.buySignalCount.set(pair, Math.max(this.buySignalCount.get(pair) - 1, 0));
+                this.sellSignalCount.set(pair, this.sellSignalCount.get(pair) + 1);
+                return new Order('sell', pair, CurrencyPossessed);
+            }
+            if (this.stopBuy(ClosePrice, SenkouSpanA, SenkouSpanB, pair)) {
+                this.buySignalCount.set(pair, Math.max(this.buySignalCount.get(pair) - 1, 0));
+                return new Order('sell', pair, CurrencyPossessed);
+            }
+        }
         return null;
+    }
+
+    buySignal(ClosePrice, SenkouSpanA, SenkouSpanB, pair) {
+        return this.timeSinceCrossUp.get(pair).length > 0 && ClosePrice > SenkouSpanA && ClosePrice > SenkouSpanB;
+    }
+
+    sellSignal(ClosePrice, SenkouSpanB, SenkouSpanA, pair) {
+        return this.timeSinceCrossDown.get(pair).length > 0 && ClosePrice < SenkouSpanB && ClosePrice < SenkouSpanA;
     }
 
     updateCrossing(TenkanSen, KijunSen, pair) {
@@ -111,10 +143,10 @@ module.exports = class IchimokuStrat {
 
     updateTimeSinceCross(pair) {
         this.timeSinceCrossUp.get(pair).forEach(function (val, idx) {
-            ++(this[idx]);
+            ++this[idx];
         }, this.timeSinceCrossUp.get(pair));
         this.timeSinceCrossDown.get(pair).forEach(function (val, idx) {
-            ++(this[idx]);
+            ++this[idx];
         }, this.timeSinceCrossDown.get(pair));
         this.timeSinceCrossUp.set(pair, this.timeSinceCrossUp.get(pair).filter(function (val) {
             return val <= 4
@@ -122,5 +154,13 @@ module.exports = class IchimokuStrat {
         this.timeSinceCrossDown.set(pair, this.timeSinceCrossDown.get(pair).filter(function (val) {
             return val <= 4
         }));
+    }
+
+    stopBuy(ClosePrice, SenkouSpanA, SenkouSpanB, pair) {
+        return ClosePrice < SenkouSpanB && ClosePrice < SenkouSpanB && this.buySignalCount.get(pair) > 0;
+    }
+
+    stopSell(ClosePrice, SenkouSpanA, SenkouSpanB, pair) {
+        return ClosePrice > SenkouSpanB && ClosePrice > SenkouSpanB && this.sellSignalCount.get(pair) > 0;
     }
 };
